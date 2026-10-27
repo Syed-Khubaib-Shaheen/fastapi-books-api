@@ -83,6 +83,15 @@ python -m pytest -v
 ```
 
 The development server does not need to be running.
+Each test uses a fresh temporary SQLite database, keeping local book data untouched.
+
+Seven tests cover:
+- Missing and invalid authentication tokens
+- Successful book creation and retrieval
+- Rejection of a blank title without saving data
+- Retrieval of a missing book
+- Partial updates that preserve omitted fields
+- Deletion followed by a lookup confirming removal
 
 ## Learning scope
 

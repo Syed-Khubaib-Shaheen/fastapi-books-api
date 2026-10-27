@@ -3,14 +3,18 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "books.db"
 
-with sqlite3.connect(DB_PATH) as connection:
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS books (
-            id INTEGER PRIMARY KEY,
-            title TEXT NOT NULL,
-            author TEXT NOT NULL
-        )
-    """)
+def init_db():
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS books (
+                id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                author TEXT NOT NULL
+            )
+        """)
+
+
+init_db()
 
 def add_book(title, author):
     with sqlite3.connect(DB_PATH) as connection:
