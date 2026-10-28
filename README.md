@@ -92,6 +92,9 @@ Seven tests cover:
 - Retrieval of a missing book
 - Partial updates that preserve omitted fields
 - Deletion followed by a lookup confirming removal
+- Author filtering
+- Pagination using limit and offset
+- Sorting books by title
 
 ## Learning scope
 

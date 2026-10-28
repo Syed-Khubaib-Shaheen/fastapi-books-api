@@ -118,3 +118,74 @@ def test_delete_book():
 
     retrieved = client.get(f"/books/{book_id}")
     assert retrieved.status_code == 404
+
+def test_filter_books_by_author():
+    headers = {"Authorization": "Bearer test-only-token"}
+
+    first = client.post(
+        "/books",
+        headers=headers,
+        json={"title": "Atomic Habits", "author": "James Clear"}
+    )
+    second = client.post(
+        "/books",
+        headers=headers,
+        json={"title": "Deep Work", "author": "Cal Newport"}
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    response = client.get(
+        "/books",
+        params={"author": "James Clear"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [first.json()]
+
+def test_paginate_books():
+    headers = {"Authorization": "Bearer test-only-token"}
+    created_books = []
+
+    for title in ["First Book", "Second Book", "Third Book"]:
+        created = client.post(
+            "/books",
+            headers=headers,
+            json={"title": title, "author": "Test Author"}
+        )
+        assert created.status_code == 201
+        created_books.append(created.json())
+
+    response = client.get(
+        "/books",
+        params={"limit": 1, "offset": 1}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [created_books[1]]
+
+def test_sort_books_by_title():
+    headers = {"Authorization": "Bearer test-only-token"}
+    created_books = {}
+
+    for title in ["Zebra", "Apple", "Mango"]:
+        created = client.post(
+            "/books",
+            headers=headers,
+            json={"title": title, "author": "Test Author"}
+        )
+        assert created.status_code == 201
+        created_books[title] = created.json()
+
+    response = client.get(
+        "/books",
+        params={"sort_by": "title"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        created_books["Apple"],
+        created_books["Mango"],
+        created_books["Zebra"]
+    ]
