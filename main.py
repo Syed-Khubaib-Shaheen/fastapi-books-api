@@ -1,3 +1,7 @@
+import sqlite3
+from auth import hash_password, verify_password, create_access_token
+from database import get_user_by_username
+from database import create_user
 import os
 import secrets
 from database import get_all_books
@@ -10,6 +14,9 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Literal
+from jwt.exceptions import InvalidTokenError
+from auth import decode_access_token
+from database import get_user_by_id
 
 app = FastAPI()
 
@@ -18,22 +25,33 @@ bearer_scheme = HTTPBearer(auto_error=False)
 def require_token(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)
 ):
-    expected_token = os.getenv("API_TOKEN")
+    unauthorized = HTTPException(
+        status_code=401,
+        detail="Missing or invalid token",
+        headers={"WWW-Authenticate": "Bearer"}
+    )
 
-    if not expected_token:
+    if credentials is None:
+        raise unauthorized
+
+    if not os.getenv("JWT_SECRET_KEY"):
         raise HTTPException(
             status_code=503,
             detail="Authentication is not configured"
         )
 
-    if credentials is None or not secrets.compare_digest(
-        credentials.credentials, expected_token
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid token",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+    try:
+        payload = decode_access_token(credentials.credentials)
+        user_id = int(payload["sub"])
+    except (InvalidTokenError, ValueError, TypeError, KeyError):
+        raise unauthorized
+
+    user = get_user_by_id(user_id)
+
+    if user is None:
+        raise unauthorized
+
+    return user
 
 class BookCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -53,6 +71,18 @@ class BookUpdate(BaseModel):
         if value is None:
             raise ValueError("Field cannot be null")
         return value
+
+class UserCreate(BaseModel):
+    username: str = Field(
+        min_length=3,
+        max_length=30,
+        pattern=r"^[A-Za-z0-9_]+$"
+    )
+    password: str = Field(min_length=15, max_length=128)
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
 
 @app.get("/books/count")
 def count_books():
@@ -125,3 +155,36 @@ def update_book(book_id: int, book: BookUpdate):
 def get_health():
     return {"status": "ok"}
 
+@app.post("/register", status_code=201)
+def register(user: UserCreate):
+    password_hash = hash_password(user.password)
+
+    try:
+        user_id = create_user(user.username, password_hash)
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="Username already exists"
+        )
+
+    return {"id": user_id, "username": user.username}
+
+@app.post("/login")
+def login(credentials: UserLogin):
+    user = get_user_by_username(credentials.username)
+
+    if user is None or not verify_password(
+        credentials.password, user["password_hash"]
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    token = create_access_token(user["id"])
+
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }

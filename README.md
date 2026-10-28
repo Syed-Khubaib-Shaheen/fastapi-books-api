@@ -9,8 +9,11 @@ FastAPI, and SQLite.
 - Persistent SQLite storage
 - Input validation and error handling
 - Author filtering, pagination, and sorting
-- Bearer token protection for POST, PATCH, and DELETE
-- Automated tests for missing and invalid tokens
+- User registration with unique usernames
+- Argon2 password hashing
+- Login with JWT access tokens that expire after 30 minutes
+- Token protection for POST, PATCH, and DELETE book endpoints
+- 21 automated tests
 
 ## Setup
 
@@ -26,35 +29,59 @@ python -m pip install -r requirements.txt
 
 ## Run locally
 
-Generate a local token:
+Generate a private signing secret and start the server
+from the same terminal:
 
 ```bash
-export API_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-```
-
-To view and copy it locally:
-
-```bash
-printenv API_TOKEN
-```
-
-Start the server from the same terminal:
-
-```bash
+export JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 fastapi dev main.py
 ```
 
+Keep the signing secret private. Do not commit it or enter it
+in the API documentation's Authorize box.
+
+Generating a new signing secret invalidates tokens signed
+with the previous secret.
+
 Interactive documentation: http://127.0.0.1:8000/docs
 
-Click **Authorize** and enter the token value without the `Bearer` prefix.
+The SQLite database and its tables are created automatically
+when the application is imported. The local database is excluded
+from Git.
 
-The SQLite database and books table are created automatically when
-the application is imported. The local database is excluded from Git.
+## Register and log in
+
+1. Open `/docs` and use POST `/register` to create an account:
+
+   ```json
+   {
+     "username": "exampleuser",
+     "password": "example-password-for-learning"
+   }
+   ```
+
+2. Send the same credentials to POST `/login`.
+3. Copy the `access_token` from the login response.
+4. Click **Authorize** and enter that token without the `Bearer` prefix.
+5. Use the protected book endpoints.
+
+Usernames must contain 3–30 letters, numbers, or underscores.
+Passwords must contain 15–128 characters.
+
+For clients such as curl, send the access token in this header:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Tokens expire after 30 minutes. Log in again to obtain a new one.
 
 ## Endpoints
 
 | Method | Path | Purpose | Token required |
 |---|---|---|---|
+| POST | `/register` | Register a user | No |
+| POST | `/login` | Obtain an access token | No |
 | GET | `/health` | Basic health response | No |
 | GET | `/books` | List books | No |
 | GET | `/books/count` | Count all books | No |
@@ -83,21 +110,31 @@ python -m pytest -v
 ```
 
 The development server does not need to be running.
-Each test uses a fresh temporary SQLite database, keeping local book data untouched.
+Database tests use fresh temporary SQLite databases,
+keeping local book data untouched. Tests use dummy signing secrets.
 
-Seven tests cover:
-- Missing and invalid authentication tokens
+The 21 tests cover:
+
+- Password hashing and verification
+- JWT creation and decoding
+- Missing and invalid tokens
 - Successful book creation and retrieval
-- Rejection of a blank title without saving data
-- Retrieval of a missing book
-- Partial updates that preserve omitted fields
-- Deletion followed by a lookup confirming removal
-- Author filtering
-- Pagination using limit and offset
-- Sorting books by title
+- Blank-title validation without saving data
+- Missing books
+- Partial updates and deletion
+- Author filtering, pagination, and sorting
+- User registration and duplicate usernames
+- Successful login, wrong passwords, and unknown usernames
+- Rejection of expired and tampered tokens
+- Rejection of tokens belonging to deleted users
 
-## Learning scope
+## Current scope
 
-Authentication currently uses one shared environment token.
-User registration, login, individual user permissions, and expiring
-tokens are not implemented yet.
+This is a learning project with registration, login, and JWT authentication.
+
+Books are currently shared. Any authenticated user can create,
+update, or delete any book. Per-user ownership and permissions
+are not implemented yet.
+
+Logout/token revocation, refresh tokens, and production deployment
+are also outside the current implementation.

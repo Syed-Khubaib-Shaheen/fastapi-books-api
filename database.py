@@ -13,6 +13,15 @@ def init_db():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL
+            )
+        """)
+        
+
 
 init_db()
 
@@ -97,6 +106,38 @@ def count_books():
             "SELECT COUNT(*) FROM books"
         ).fetchone()
         return row[0]
-    
+
+def create_user(username, password_hash):
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            (username, password_hash)
+        )
+        return cursor.lastrowid
+
+def get_user_by_username(username):
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            """
+            SELECT id, username, password_hash
+            FROM users
+            WHERE username = ?
+            """,
+            (username,)
+        ).fetchone()
+
+        return dict(row) if row is not None else None
+
+def get_user_by_id(user_id):
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT id, username FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+
+        return dict(row) if row is not None else None
+           
 if __name__ == "__main__":
     print(get_book(1))
