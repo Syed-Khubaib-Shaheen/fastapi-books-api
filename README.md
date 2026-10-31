@@ -13,7 +13,7 @@ FastAPI, and SQLite.
 - Argon2 password hashing
 - Login with JWT access tokens that expire after 30 minutes
 - Token protection for POST, PATCH, and DELETE book endpoints
-- 21 automated tests
+- 22 automated tests
 
 ## Setup
 
@@ -113,7 +113,7 @@ The development server does not need to be running.
 Database tests use fresh temporary SQLite databases,
 keeping local book data untouched. Tests use dummy signing secrets.
 
-The 21 tests cover:
+The 22 tests cover:
 
 - Password hashing and verification
 - JWT creation and decoding
@@ -127,14 +127,19 @@ The 21 tests cover:
 - Successful login, wrong passwords, and unknown usernames
 - Rejection of expired and tampered tokens
 - Rejection of tokens belonging to deleted users
+- Ownership assignment and rejection of another user's update/delete requests
 
 ## Current scope
 
-This is a learning project with registration, login, and JWT authentication.
+This project includes registration, login, JWT authentication,
+and ownership-based permissions.
 
-Books are currently shared. Any authenticated user can create,
-update, or delete any book. Per-user ownership and permissions
-are not implemented yet.
+Anyone can view books. Creating a book requires login, and the
+server assigns ownership to the authenticated user. Only the owner
+can update or delete it; other users receive 403 Forbidden.
+
+Books created before ownership was introduced are preserved without
+an owner and cannot be updated or deleted through the API.
 
 Logout/token revocation, refresh tokens, and production deployment
-are also outside the current implementation.
+are not implemented yet.

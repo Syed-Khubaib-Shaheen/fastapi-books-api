@@ -61,6 +61,8 @@ def test_create_book_with_valid_token(auth_headers):
     assert response.status_code == 201
 
     data = response.json()
+    owner = database.get_user_by_username("api_test_user")
+    assert data["owner_id"] == owner["id"]
     assert isinstance(data["id"], int)
     assert data["title"] == "Test Book"
     assert data["author"] == "Test Author"
@@ -112,7 +114,8 @@ def test_update_book_title(auth_headers):
     assert updated.json() == {
         "id": book_id,
         "title": "Updated Title",
-        "author": "Original Author"
+        "author": "Original Author",
+        "owner_id": created.json()["owner_id"]
     }
 
     saved = client.get(f"/books/{book_id}")
@@ -367,3 +370,46 @@ def test_deleted_user_token_is_rejected(auth_headers):
 
     assert response.status_code == 401
     assert database.count_books() == 0
+
+@pytest.fixture
+def other_user_headers():
+    credentials = {
+        "username": "another_user",
+        "password": "another-example-password"
+    }
+
+    registered = client.post("/register", json=credentials)
+    assert registered.status_code == 201
+
+    logged_in = client.post("/login", json=credentials)
+    assert logged_in.status_code == 200
+
+    token = logged_in.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+def test_other_user_cannot_modify_book(auth_headers, other_user_headers):
+    created = client.post(
+        "/books",
+        headers=auth_headers,
+        json={"title": "Owner Book", "author": "Original Author"}
+    )
+    assert created.status_code == 201
+    original_book = created.json()
+    book_id = original_book["id"]
+
+    updated = client.patch(
+        f"/books/{book_id}",
+        headers=other_user_headers,
+        json={"title": "Unauthorized Change"}
+    )
+    assert updated.status_code == 403
+
+    deleted = client.delete(
+        f"/books/{book_id}",
+        headers=other_user_headers
+    )
+    assert deleted.status_code == 403
+
+    saved = client.get(f"/books/{book_id}")
+    assert saved.status_code == 200
+    assert saved.json() == original_book

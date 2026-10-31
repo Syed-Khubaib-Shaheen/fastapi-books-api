@@ -62,8 +62,8 @@ class BookCreate(BaseModel):
 class BookUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    title: str | None = None
-    author: str | None = None
+    title: str | None = Field(default=None, min_length=1)
+    author: str | None = Field(default=None, min_length=1)
 
     @field_validator("title", "author")
     @classmethod
@@ -117,39 +117,61 @@ def get_books(
 def greet_user(name: str):
     return {"message": f"Hello{name}"}
 
-@app.post(
-    "/books",
-    status_code=201,
-    dependencies=[Depends(require_token)]
-)
-def create_book(book: BookCreate):
-    new_id = add_book(book.title, book.author)
+@app.post("/books", status_code=201)
+def create_book(
+    book: BookCreate,
+    current_user: dict = Depends(require_token)
+):
+    new_id = add_book(
+        book.title,
+        book.author,
+        current_user["id"]
+    )
     return get_book_from_db(new_id)
 
-@app.delete(
-    "/books/{book_id}",
-    dependencies=[Depends(require_token)]
-)
-def delete_book(book_id: int):
-    deleted_count = delete_book_from_db(book_id)
 
-    if deleted_count == 0:
+@app.patch("/books/{book_id}")
+def update_book(
+    book_id: int,
+    book: BookUpdate,
+    current_user: dict = Depends(require_token)
+):
+    existing_book = get_book_from_db(book_id)
+
+    if existing_book is None:
         raise HTTPException(status_code=404, detail="Book not found")
 
-    return {"message": "Book deleted"}
-
-@app.patch(
-    "/books/{book_id}",
-    dependencies=[Depends(require_token)]
-)
-def update_book(book_id: int, book: BookUpdate):
-    if get_book_from_db(book_id) is None:
-        raise HTTPException(status_code=404, detail="Book not found")
+    if existing_book["owner_id"] != current_user["id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can modify this book"
+        )
 
     changes = book.model_dump(exclude_unset=True)
-    update_book_in_db(book_id, changes)
+    update_book_in_db(book_id, changes, current_user["id"])
 
     return get_book_from_db(book_id)
+
+
+@app.delete("/books/{book_id}")
+def delete_book(
+    book_id: int,
+    current_user: dict = Depends(require_token)
+):
+    existing_book = get_book_from_db(book_id)
+
+    if existing_book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    if existing_book["owner_id"] != current_user["id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can delete this book"
+        )
+
+    delete_book_from_db(book_id, current_user["id"])
+
+    return {"message": "Book deleted"}
 
 @app.get("/health")
 def get_health():
